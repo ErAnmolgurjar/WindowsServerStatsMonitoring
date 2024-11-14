@@ -12,11 +12,11 @@ def get_server_stats():
     while True:
         # Get system stats using psutil
         memory = psutil.virtual_memory().percent
-        cpu = psutil.cpu_percent(interval=1)  # This blocks for 1 second
+        cpu = psutil.cpu_percent(interval=0.5)  # This blocks for 1 second
         # Emit the stats via SocketIO every 1 second
         socketio.emit('update_stats', {'cpu': cpu, 'memory': memory})
         # Sleep for a while before getting stats again
-        time.sleep(1)
+        #time.sleep(1)
 
 @app.route('/')
 def index():
