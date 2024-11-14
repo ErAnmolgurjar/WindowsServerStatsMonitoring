@@ -2,20 +2,17 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 import psutil
 import time
+from datetime import datetime
 
-# Initialize Flask app and SocketIO
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-# Function to get server stats
 def get_server_stats():
     while True:
-        # Get system stats using psutil
         memory = psutil.virtual_memory().percent
-        cpu = psutil.cpu_percent(interval=0.5)  # This blocks for 1 second
-        # Emit the stats via SocketIO every 1 second
-        socketio.emit('update_stats', {'cpu': cpu, 'memory': memory})
-        # Sleep for a while before getting stats again
+        cpu = psutil.cpu_percent(interval=0.5)
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        socketio.emit('update_stats', {'cpu': cpu, 'memory': memory, 'timstamp':timestamp})
         #time.sleep(1)
 
 @app.route('/')
