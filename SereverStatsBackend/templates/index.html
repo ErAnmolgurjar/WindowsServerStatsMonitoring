@@ -47,18 +47,39 @@
     </div> -->
 
   <script>
-    // Connect to the WebSocket server
-    var socket = io.connect(
-      "http://" + document.domain + ":" + location.port
-    );
+    let cpuValues = [{ x: new Date().getTime(), y: 0 }];
+    let memoryValues = [{ x: new Date().getTime(), y: 0 }];
+
+    fetch('/api/lastmin-stats')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(data => {
+        let cpuData = data.cpu;
+        let memoryData = data.memory;
+        let timestampss = data.timstamp;
+        cpuValues.pop(0);
+        memoryValues.pop(0);
+        for (let i = 0; i < cpuData.length; i++) {
+          let timestamps = timestampss[i];
+          cpuValues.push({ x: timestamps, y: cpuData[i] });
+          memoryValues.push({ x: timestamps, y: memoryData[i] });
+        }
+        console.log(data);
+      })
+      .catch(error => {
+        console.error('There was a problem with the fetch operation:', error);
+      });
+
 
     let isCpuHover = false;
     let isMemoryHover = false;
-
     // Function to handle mouse enter and leave for a given chart
     function setupHoverEvents(chartId, hoverVariable) {
       const chartElement = document.querySelector(`#${chartId}`);
-
       // Mouseenter event: When the mouse enters the chart area
       chartElement.addEventListener("mouseenter", function () {
         window[hoverVariable] = true;
@@ -92,10 +113,7 @@
     setupHoverEvents("cpu-chart", "isCpuHover");
     setupHoverEvents("memory-chart", "isMemoryHover");
 
-    let cpuValues = [{ x: new Date().getTime(), y: 0 }];
-    let memoryValues = [{ x: new Date().getTime(), y: 0 }];
-
-    let XAXISRANGE = 40000;
+    let XAXISRANGE = 60000;
 
     var cpuOptions = {
       series: [
@@ -257,9 +275,14 @@
     cpuChart.render();
     memoryChart.render();
 
+    // Connect to the WebSocket server
+    var socket = io.connect(
+      "http://" + document.domain + ":" + location.port
+    );
+
     // Listen for the 'update_stats' event from the server
     socket.on("update_stats", function (data) {
-      var timestamp = data.timstamp;
+      timestamp = data.timstamp;
       // Ensure valid data
       var cpuValue = isNaN(data.cpu) ? 0 : data.cpu;
       var memoryValue = isNaN(data.memory) ? 0 : data.memory;
