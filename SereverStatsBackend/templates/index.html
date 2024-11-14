@@ -259,8 +259,8 @@
         memoryValues.push({ x: timestamp, y: memoryValue });
 
         // Optional: Limit the number of data points to avoid chart overflow (e.g., 60 points)
-        if (cpuValues.length > 100) cpuValues.shift();
-        if (memoryValues.length > 100) memoryValues.shift();
+        if (cpuValues.length > 500) cpuValues.shift();
+        if (memoryValues.length > 500) memoryValues.shift();
         // Update the charts with the new data
         if (!isCpuHover) cpuChart.updateSeries([{ data: cpuValues }]);
         if (!isMemoryHover) memoryChart.updateSeries([{ data: memoryValues }]);
