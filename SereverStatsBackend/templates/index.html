@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Stats</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .chart-container {
+            margin-top: 20px;
+            display: flex;
+            
+        }
+
+        .chart {
+            margin-bottom: 40px;
+            width : 48%;
+        }
+
+        h1 {
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Real-Time Server Stats</h1>
+    <!-- CPU Usage Chart -->
+    <div class="chart-container">
+        <div id="cpu-chart" class="chart"></div>
+        <div id="memory-chart" class="chart"></div>
+    </div>
+
+    <!-- Memory Usage Chart -->
+    <!-- <div class="chart-container">
+        <div id="memory-chart" class="chart"></div>
+    </div> -->
+
+    <!-- Disk Usage Chart -->
+    <!-- <div class="chart-container">
+        <div id="disk-chart" class="chart"></div>
+    </div> -->
+
+    <script>
+        // Connect to the WebSocket server
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        let isCpuHover = false;
+        let isMemoryHover = false;
+        
+
+        // Function to handle mouse enter and leave for a given chart
+        function setupHoverEvents(chartId, hoverVariable) {
+            const chartElement = document.querySelector(`#${chartId}`);
+
+            // Mouseenter event: When the mouse enters the chart area
+            chartElement.addEventListener('mouseenter', function() {
+                window[hoverVariable] = true;
+                if(hoverVariable == "isCpuHover"){
+                    isCpuHover = true;
+                }
+                else if(hoverVariable == "isMemoryHover"){
+                    isMemoryHover = true;
+                }
+                console.log(`${chartId} chart hovered, ${hoverVariable}:`, window[hoverVariable]);
+            });
+
+            // Mouseleave event: When the mouse leaves the chart area
+            chartElement.addEventListener('mouseleave', function() {
+                window[hoverVariable] = false;
+                if(hoverVariable == "isCpuHover"){
+                    isCpuHover = false;
+                }
+                else if(hoverVariable == "isMemoryHover"){
+                    isMemoryHover = false;
+                }
+                console.log(`Mouse left ${chartId} chart, ${hoverVariable}:`, window[hoverVariable]);
+            });
+        }
+
+        // Set up hover events for all charts
+        setupHoverEvents('cpu-chart', 'isCpuHover');
+        setupHoverEvents('memory-chart', 'isMemoryHover');
+
+        let cpuValues = [{ x: new Date().getTime(), y: 0 }];
+        let memoryValues = [{ x: new Date().getTime(), y: 0 }];
+
+
+        let XAXISRANGE = 60000;  // Example time range in milliseconds (e.g., 15 minutes)
+
+        var cpuOptions = {
+            series: [{
+                name: 'CPU Usage (%)',
+                data: cpuValues.slice()  // Copy the current values
+            }],
+            chart: {
+                id: 'realtime-cpu',
+                height: 350,
+                type: 'line',
+                animations: {
+                    enabled: true,
+                    easing: 'linear',
+                    dynamicAnimation: {
+                        speed: 100  // Adjust the speed of updates
+                    }
+                },
+                toolbar: {
+                    show: true
+                },
+                zoom: {
+                    enabled: true  // Disable zooming
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function (val, opts) {
+                    // Check if the current point is the last one
+                    if (opts.dataPointIndex === opts.w.globals.series[0].length - 1) {
+                      return val; // Display value for the last data point
+                    } else {
+                      return ''; // Hide data labels for all other points
+                    }
+                  }
+            },
+            stroke: {
+                curve: 'smooth'  // Smooth the line curve
+            },
+            title: {
+                text: 'CPU Usage (%)',
+                align: 'left'
+            },
+            markers: {
+                size: 0  // No markers on data points
+            },
+            xaxis: {
+                type: 'datetime',
+                range: XAXISRANGE,
+                labels: {
+                    format: 'HH:mm:ss',  // Format the timestamp as you want
+                    datetimeUTC: false  // Use local time (set to true for UTC)
+                }
+            },
+            yaxis: {
+                max: 100  // Set max value for the Y-axis
+            },
+            legend: {
+                show: true
+            }
+        };
+
+        var memoryOptions = {
+            series: [{
+                name: 'Memory Usage (%)',
+                data: memoryValues.slice()
+            }],
+            chart: {
+                id: 'realtime-memory',
+                height: 350,
+                type: 'line',
+                animations: {
+                    enabled: true,
+                    easing: 'linear',
+                    dynamicAnimation: {
+                        speed: 100
+                    }
+                },
+                toolbar: {
+                    show: true
+                },
+                zoom: {
+                    enabled: true
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function (val, opts) {
+                    // Check if the current point is the last one
+                    if (opts.dataPointIndex === opts.w.globals.series[0].length - 1) {
+                      return val; // Display value for the last data point
+                    } else {
+                      return ''; // Hide data labels for all other points
+                    }
+                  }
+            },
+            stroke: {
+                curve: 'smooth'
+            },
+            title: {
+                text: 'RAM Usage (%)',
+                align: 'left'
+            },
+            markers: {
+                size: 0
+            },
+            xaxis: {
+                type: 'datetime',
+                range: XAXISRANGE,
+                labels: {
+                    format: 'HH:mm:ss',  // Format the timestamp as you want
+                    datetimeUTC: false  // Use local time (set to true for UTC)
+                }
+            },
+            yaxis: {
+                max: 100
+            },
+            legend: {
+                show: true
+            }
+        };
+
+
+        // Create the charts
+        var cpuChart = new ApexCharts(document.querySelector("#cpu-chart"), cpuOptions);
+        var memoryChart = new ApexCharts(document.querySelector("#memory-chart"), memoryOptions);
+
+        // Render the charts
+        cpuChart.render();
+        memoryChart.render();
+
+        // Listen for the 'update_stats' event from the server
+        socket.on('update_stats', function (data) {
+            var timestamp = new Date().getTime();
+
+            // Ensure valid data
+            var cpuValue = isNaN(data.cpu) ? 0 : data.cpu;
+            var memoryValue = isNaN(data.memory) ? 0 : data.memory;
+
+            // Add new data points to the charts
+            cpuValues.push({ x: timestamp, y: cpuValue });
+            memoryValues.push({ x: timestamp, y: memoryValue });
+
+            // Optional: Limit the number of data points to avoid chart overflow (e.g., 60 points)
+            // if (cpuValues.length > 60) cpuValues.shift();
+            // if (memoryValues.length > 60) memoryValues.shift();
+            // if (diskValues.length > 60) diskValues.shift();
+
+            // Update the charts with the new data
+            if (!isCpuHover) cpuChart.updateSeries([{ data: cpuValues }]);
+            if (!isMemoryHover) memoryChart.updateSeries([{ data: memoryValues }]);
+
+        });
+
+    </script>
+</body>
+
+</html>
