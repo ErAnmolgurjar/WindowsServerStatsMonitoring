@@ -11,6 +11,10 @@ cpu_uses = []
 memory_uses = []
 timestampcoll = []
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 @app.route('/api/lastmin-stats', methods=['GET'])
 def lastmin_stats():
     return jsonify({"cpu": cpu_uses, "memory":memory_uses,'timstamp':timestampcoll})
@@ -104,10 +108,6 @@ def terminate_processes():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-@app.route('/')
-def index():
-    return render_template('index.html')
 
 # Start the background thread when the app starts
 def start_background_task():
