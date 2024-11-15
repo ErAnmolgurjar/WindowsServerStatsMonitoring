@@ -1,304 +1,472 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Server Stats</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/2.1.8/js/dataTables.js"></script>
+    <script src="https://cdn.datatables.net/2.1.8/js/dataTables.bootstrap5.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Server Stats</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-    }
+      .chart-container {
+        margin-top: 20px;
+        display: flex;
+      }
 
-    .chart-container {
-      margin-top: 20px;
-      display: flex;
-    }
+      .chart {
+        margin-bottom: 40px;
+        width: 48%;
+      }
 
-    .chart {
-      margin-bottom: 40px;
-      width: 48%;
-    }
+      h1 {
+        text-align: center;
+      }
 
-    h1 {
-      text-align: center;
-    }
-  </style>
-</head>
+      .processHidden {
+        display: none;
+      }
 
-<body>
-  <h1>Real-Time Server Stats</h1>
-  <!-- CPU Usage Chart -->
-  <div class="chart-container">
-    <div id="cpu-chart" class="chart"></div>
-    <div id="memory-chart" class="chart"></div>
-  </div>
+      .processShow {
+        display: block;
+      }
+    </style>
+  </head>
 
-  <!-- Memory Usage Chart -->
-  <!-- <div class="chart-container">
+  <body>
+    <h1>Real-Time Server Stats</h1>
+    <div id="alertContainer"></div>
+    <!-- CPU Usage Chart -->
+    <div class="chart-container">
+      <div id="cpu-chart" class="chart"></div>
+      <div id="memory-chart" class="chart"></div>
+    </div>
+
+    <button type="button" class="btn btn-primary" id="processBtn">
+      Get Current Process
+    </button>
+    <div class="processHidden" id="processContainer">
+      <h2>Process Stats</h2>
+      <table id="processTable">
+        <thead>
+          <tr>
+            <th>Process Name</th>
+            <th>CPU Usage (%)</th>
+            <th>Memory Usage (%)</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <!-- Memory Usage Chart -->
+    <!-- <div class="chart-container">
         <div id="memory-chart" class="chart"></div>
     </div> -->
 
-  <!-- Disk Usage Chart -->
-  <!-- <div class="chart-container">
+    <!-- Disk Usage Chart -->
+    <!-- <div class="chart-container">
         <div id="disk-chart" class="chart"></div>
     </div> -->
 
-  <script>
-    let cpuValues = [{ x: new Date().getTime(), y: 0 }];
-    let memoryValues = [{ x: new Date().getTime(), y: 0 }];
+    <script>
+      try {
+        let dataTable;
 
-    fetch('/api/lastmin-stats')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
+        document
+          .getElementById("processBtn")
+          .addEventListener("click", fetchProcessData);
+
+        async function fetchProcessData() {
+          try {
+            const response = await fetch(
+              "http://127.0.0.1:5000/api/process_stats"
+            );
+            const data = await response.json();
+
+            if (data.processes && Array.isArray(data.processes)) {
+              populateTable(data.processes);
+
+              const processContainer =
+                document.getElementById("processContainer");
+              if (processContainer.className == "processHidden") {
+                processContainer.className = "processShow";
+              }
+            } else {
+              console.error("Invalid data format:", data);
+              showAlert("danger", "Failed to fetch process data.");
+            }
+          } catch (error) {
+            console.error("Error fetching data:", error);
+            showAlert("danger", "Error fetching process data.");
+          }
         }
-        return response.json();
-      })
-      .then(data => {
-        let cpuData = data.cpu;
-        let memoryData = data.memory;
-        let timestampss = data.timstamp;
-        cpuValues.pop(0);
-        memoryValues.pop(0);
-        for (let i = 0; i < cpuData.length; i++) {
-          let timestamps = timestampss[i];
-          cpuValues.push({ x: timestamps, y: cpuData[i] });
-          memoryValues.push({ x: timestamps, y: memoryData[i] });
+
+        function populateTable(processes) {
+          const tableBody = document.querySelector("#processTable tbody");
+          tableBody.innerHTML = "";
+
+          processes.forEach((process) => {
+            const row = document.createElement("tr");
+
+            const nameCell = document.createElement("td");
+            nameCell.textContent = process.name || "N/A";
+            row.appendChild(nameCell);
+
+            const cpuCell = document.createElement("td");
+            cpuCell.textContent = process.cpu_percent.toFixed(2);
+            row.appendChild(cpuCell);
+
+            const memoryCell = document.createElement("td");
+            memoryCell.textContent = (process.memory_percent * 100).toFixed(2);
+            row.appendChild(memoryCell);
+
+            const pidsCell = document.createElement("td");
+            pidsCell.className = "text-center";
+            const deleteIcon = document.createElement("i");
+            deleteIcon.classList.add("fa-solid", "fa-trash-can");
+            deleteIcon.setAttribute("data-pids", process.pids);
+
+            deleteIcon.addEventListener("click", function () {
+              const pids = this.getAttribute("data-pids");
+              terminateProcesses(pids);
+            });
+
+            pidsCell.appendChild(deleteIcon);
+            row.appendChild(pidsCell);
+
+            tableBody.appendChild(row);
+          });
+
+          if (!dataTable) {
+            dataTable = $("#processTable").DataTable();
+          } else {
+            dataTable.clear().rows.add(tableBody.rows).draw();
+          }
         }
-        console.log(data);
-      })
-      .catch(error => {
-        console.error('There was a problem with the fetch operation:', error);
-      });
 
-
-    let isCpuHover = false;
-    let isMemoryHover = false;
-    // Function to handle mouse enter and leave for a given chart
-    function setupHoverEvents(chartId, hoverVariable) {
-      const chartElement = document.querySelector(`#${chartId}`);
-      // Mouseenter event: When the mouse enters the chart area
-      chartElement.addEventListener("mouseenter", function () {
-        window[hoverVariable] = true;
-        if (hoverVariable == "isCpuHover") {
-          isCpuHover = true;
-        } else if (hoverVariable == "isMemoryHover") {
-          isMemoryHover = true;
+        function terminateProcesses(pids) {
+          console.log(`Terminating processes with PIDs: ${pids}`);
+          fetch("/api/terminate-processes", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ pids: pids }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              showAlert(
+                "success",
+                `Successfully terminated processes with PIDs: ${pids}`
+              );
+              fetchProcessData();
+            })
+            .catch((error) => {
+              console.error("Error:", error);
+              showAlert(
+                "danger",
+                `Failed to terminate processes with PIDs: ${pids}`
+              );
+            });
         }
-        console.log(
-          `${chartId} chart hovered, ${hoverVariable}:`,
-          window[hoverVariable]
-        );
-      });
 
-      // Mouseleave event: When the mouse leaves the chart area
-      chartElement.addEventListener("mouseleave", function () {
-        window[hoverVariable] = false;
-        if (hoverVariable == "isCpuHover") {
-          isCpuHover = false;
-        } else if (hoverVariable == "isMemoryHover") {
-          isMemoryHover = false;
+        function showAlert(type, message) {
+          const alertContainer = document.getElementById("alertContainer");
+          const alert = document.createElement("div");
+          alert.classList.add(
+            "alert",
+            `alert-${type}`,
+            "alert-dismissible",
+            "fade",
+            "show"
+          );
+          alert.setAttribute("role", "alert");
+          alert.innerHTML = `${message} <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+
+          alertContainer.appendChild(alert);
+
+          setTimeout(() => {
+            alert.remove();
+          }, 5000);
         }
-        console.log(
-          `Mouse left ${chartId} chart, ${hoverVariable}:`,
-          window[hoverVariable]
-        );
-      });
-    }
+      } catch {}
+      let cpuValues = [{ x: new Date().getTime(), y: 0 }];
+      let memoryValues = [{ x: new Date().getTime(), y: 0 }];
 
-    // Set up hover events for all charts
-    setupHoverEvents("cpu-chart", "isCpuHover");
-    setupHoverEvents("memory-chart", "isMemoryHover");
+      fetch("/api/lastmin-stats")
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+          return response.json();
+        })
+        .then((data) => {
+          let cpuData = data.cpu;
+          let memoryData = data.memory;
+          let timestampss = data.timstamp;
+          cpuValues.pop(0);
+          memoryValues.pop(0);
+          for (let i = 0; i < cpuData.length; i++) {
+            let timestamps = timestampss[i];
+            cpuValues.push({ x: timestamps, y: cpuData[i] });
+            memoryValues.push({ x: timestamps, y: memoryData[i] });
+          }
+          console.log(data);
+        })
+        .catch((error) => {
+          console.error("There was a problem with the fetch operation:", error);
+        });
 
-    let XAXISRANGE = 60000;
+      let isCpuHover = false;
+      let isMemoryHover = false;
+      // Function to handle mouse enter and leave for a given chart
+      function setupHoverEvents(chartId, hoverVariable) {
+        const chartElement = document.querySelector(`#${chartId}`);
+        // Mouseenter event: When the mouse enters the chart area
+        chartElement.addEventListener("mouseenter", function () {
+          window[hoverVariable] = true;
+          if (hoverVariable == "isCpuHover") {
+            isCpuHover = true;
+          } else if (hoverVariable == "isMemoryHover") {
+            isMemoryHover = true;
+          }
+          console.log(
+            `${chartId} chart hovered, ${hoverVariable}:`,
+            window[hoverVariable]
+          );
+        });
 
-    var cpuOptions = {
-      series: [
-        {
-          name: "CPU Usage (%)",
-          data: cpuValues.slice(),
-        },
-      ],
-      chart: {
-        id: "realtime-cpu",
-        height: 350,
-        type: "line",
-        animations: {
-          enabled: true,
-          easing: "linear",
-          dynamicAnimation: {
-            speed: 100,
+        // Mouseleave event: When the mouse leaves the chart area
+        chartElement.addEventListener("mouseleave", function () {
+          window[hoverVariable] = false;
+          if (hoverVariable == "isCpuHover") {
+            isCpuHover = false;
+          } else if (hoverVariable == "isMemoryHover") {
+            isMemoryHover = false;
+          }
+          console.log(
+            `Mouse left ${chartId} chart, ${hoverVariable}:`,
+            window[hoverVariable]
+          );
+        });
+      }
+
+      // Set up hover events for all charts
+      setupHoverEvents("cpu-chart", "isCpuHover");
+      setupHoverEvents("memory-chart", "isMemoryHover");
+
+      let XAXISRANGE = 60000;
+
+      var cpuOptions = {
+        series: [
+          {
+            name: "CPU Usage (%)",
+            data: cpuValues.slice(),
+          },
+        ],
+        chart: {
+          id: "realtime-cpu",
+          height: 350,
+          type: "area",
+          animations: {
+            enabled: true,
+            easing: "linear",
+            dynamicAnimation: {
+              speed: 30,
+            },
+          },
+          toolbar: {
+            show: true,
+          },
+          zoom: {
+            enabled: true,
           },
         },
-        toolbar: {
-          show: true,
-        },
-        zoom: {
+        dataLabels: {
           enabled: true,
-        },
-      },
-      dataLabels: {
-        enabled: true,
-        style: {
-          fontSize: "16px",
-          fontWeight: "bold",
-          colors: ["#000"],
-        },
-        offsetX: -8,
-        formatter: function (val, opts) {
-          if (opts.dataPointIndex === opts.w.globals.series[0].length - 1) {
-            return val;
-          } else {
-            return "";
-          }
-        },
-      },
-      stroke: {
-        curve: "smooth",
-      },
-      title: {
-        text: "CPU Usage (%)",
-        align: "left",
-      },
-      markers: {
-        size: 0,
-      },
-      xaxis: {
-        type: "datetime",
-        range: XAXISRANGE,
-        labels: {
-          format: "HH:mm:ss",
-          datetimeUTC: false,
-        },
-      },
-      tooltip: {
-        x: {
-          format: 'HH:mm:ss'
-        }
-      },
-      yaxis: {
-        max: 100,
-        min: 0,
-      },
-      legend: {
-        show: false,
-      },
-    };
-
-    var memoryOptions = {
-      series: [
-        {
-          name: "Memory Usage (%)",
-          data: memoryValues.slice(),
-        },
-      ],
-      chart: {
-        id: "realtime-memory",
-        height: 350,
-        type: "line",
-        animations: {
-          enabled: true,
-          easing: "linear",
-          dynamicAnimation: {
-            speed: 100,
+          style: {
+            fontSize: "16px",
+            fontWeight: "bold",
+            colors: ["#000"],
+          },
+          offsetX: -8,
+          formatter: function (val, opts) {
+            if (opts.dataPointIndex === opts.w.globals.series[0].length - 1) {
+              return val;
+            } else {
+              return "";
+            }
           },
         },
-        toolbar: {
+        stroke: {
+          curve: "smooth",
+          width: 2,
+        },
+        title: {
+          text: "CPU Usage (%)",
+          align: "left",
+        },
+        markers: {
+          size: 0,
+        },
+        xaxis: {
+          type: "datetime",
+          range: XAXISRANGE,
+          labels: {
+            format: "HH:mm:ss",
+            datetimeUTC: false,
+          },
+        },
+        tooltip: {
+          x: {
+            format: "HH:mm:ss",
+          },
+        },
+        yaxis: {
+          max: 100,
+          min: 0,
+        },
+        legend: {
+          show: false,
+        },
+      };
+
+      var memoryOptions = {
+        series: [
+          {
+            name: "Memory Usage (%)",
+            data: memoryValues.slice(),
+          },
+        ],
+        chart: {
+          id: "realtime-memory",
+          height: 350,
+          type: "area",
+          animations: {
+            enabled: true,
+            easing: "linear",
+            dynamicAnimation: {
+              speed: 30,
+            },
+          },
+          toolbar: {
+            show: true,
+          },
+          zoom: {
+            enabled: true,
+          },
+        },
+        dataLabels: {
+          enabled: true,
+          style: {
+            fontSize: "16px",
+            fontWeight: "bold",
+            colors: ["#000"],
+          },
+          offsetX: -8,
+          formatter: function (val, opts) {
+            if (opts.dataPointIndex === opts.w.globals.series[0].length - 1) {
+              return val;
+            } else {
+              return "";
+            }
+          },
+        },
+        stroke: {
+          curve: "smooth",
+          width: 2,
+        },
+        title: {
+          text: "RAM Usage (%)",
+          align: "left",
+        },
+        markers: {
+          size: 0,
+        },
+        xaxis: {
+          type: "datetime",
+          range: XAXISRANGE,
+          labels: {
+            format: "HH:mm:ss",
+            datetimeUTC: false,
+          },
+        },
+        tooltip: {
+          x: {
+            format: "HH:mm:ss",
+          },
+        },
+        yaxis: {
+          max: 100,
+          min: 0,
+        },
+        legend: {
           show: true,
         },
-        zoom: {
-          enabled: true,
-        },
-      },
-      dataLabels: {
-        enabled: true,
-        style: {
-          fontSize: "16px",
-          fontWeight: "bold",
-          colors: ["#000"],
-        },
-        offsetX: -8,
-        formatter: function (val, opts) {
-          if (opts.dataPointIndex === opts.w.globals.series[0].length - 1) {
-            return val;
-          } else {
-            return "";
-          }
-        },
-      },
-      stroke: {
-        curve: "smooth",
-      },
-      title: {
-        text: "RAM Usage (%)",
-        align: "left",
-      },
-      markers: {
-        size: 0,
-      },
-      xaxis: {
-        type: "datetime",
-        range: XAXISRANGE,
-        labels: {
-          format: "HH:mm:ss",
-          datetimeUTC: false,
-        },
-      },
-      tooltip: {
-        x: {
-          format: 'HH:mm:ss'
-        }
-      },
-      yaxis: {
-        max: 100,
-        min: 0,
-      },
-      legend: {
-        show: true,
-      },
-    };
+      };
 
-    // Create the charts
-    var cpuChart = new ApexCharts(
-      document.querySelector("#cpu-chart"),
-      cpuOptions
-    );
-    var memoryChart = new ApexCharts(
-      document.querySelector("#memory-chart"),
-      memoryOptions
-    );
+      // Create the charts
+      var cpuChart = new ApexCharts(
+        document.querySelector("#cpu-chart"),
+        cpuOptions
+      );
+      var memoryChart = new ApexCharts(
+        document.querySelector("#memory-chart"),
+        memoryOptions
+      );
 
-    // Render the charts
-    cpuChart.render();
-    memoryChart.render();
+      // Render the charts
+      cpuChart.render();
+      memoryChart.render();
 
-    // Connect to the WebSocket server
-    var socket = io.connect(
-      "http://" + document.domain + ":" + location.port
-    );
+      // Connect to the WebSocket server
+      var socket = io.connect(
+        "http://" + document.domain + ":" + location.port
+      );
 
-    // Listen for the 'update_stats' event from the server
-    socket.on("update_stats", function (data) {
-      timestamp = data.timstamp;
-      // Ensure valid data
-      var cpuValue = isNaN(data.cpu) ? 0 : data.cpu;
-      var memoryValue = isNaN(data.memory) ? 0 : data.memory;
+      // Listen for the 'update_stats' event from the server
+      socket.on("update_stats", function (data) {
+        timestamp = data.timstamp;
+        // Ensure valid data
+        var cpuValue = isNaN(data.cpu) ? 0 : data.cpu;
+        var memoryValue = isNaN(data.memory) ? 0 : data.memory;
 
-      // Add new data points to the charts
-      cpuValues.push({ x: timestamp, y: cpuValue });
-      memoryValues.push({ x: timestamp, y: memoryValue });
+        // Add new data points to the charts
+        cpuValues.push({ x: timestamp, y: cpuValue });
+        memoryValues.push({ x: timestamp, y: memoryValue });
 
-      // Optional: Limit the number of data points to avoid chart overflow (e.g., 60 points)
-      if (cpuValues.length > 120) cpuValues.shift();
-      if (memoryValues.length > 120) memoryValues.shift();
-      // Update the charts with the new data
-      if (!isCpuHover) cpuChart.updateSeries([{ data: cpuValues }]);
-      if (!isMemoryHover) memoryChart.updateSeries([{ data: memoryValues }]);
-    });
-  </script>
-</body>
-
+        // Optional: Limit the number of data points to avoid chart overflow (e.g., 60 points)
+        if (cpuValues.length > 120) cpuValues.shift();
+        if (memoryValues.length > 120) memoryValues.shift();
+        // Update the charts with the new data
+        if (!isCpuHover) cpuChart.updateSeries([{ data: cpuValues }]);
+        if (!isMemoryHover) memoryChart.updateSeries([{ data: memoryValues }]);
+      });
+    </script>
+  </body>
 </html>

@@ -31,7 +31,79 @@ def get_server_stats():
         timestampcoll.append(timestamp)
         resultshortner(timestampcoll)
         socketio.emit('update_stats', {'cpu': cpu, 'memory': memory, 'timstamp':timestamp})
-        time.sleep(0.5)
+        time.sleep(1)
+
+@app.route('/api/process_stats', methods=['GET'])
+def get_process_stats():
+    process_stats = {}
+    num_cores = psutil.cpu_count()
+    for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+        try:
+            cpu_percent_scaled = proc.info['cpu_percent'] / num_cores
+            name = proc.info['name']
+            pid = proc.info['pid']
+            cpu_percent = cpu_percent_scaled
+            #cpu_percent = proc.info['cpu_percent']
+            memory_percent = proc.info['memory_percent']
+            
+            if name not in process_stats:
+                process_stats[name] = {
+                    'name': name,
+                    'pids': [pid],
+                    'cpu_percent': cpu_percent,
+                    'memory_percent': memory_percent
+                }
+            else:
+                process_stats[name]['pids'].append(pid)
+                process_stats[name]['cpu_percent'] += cpu_percent
+                process_stats[name]['memory_percent'] += memory_percent
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+    result = []
+    for name, data in process_stats.items():
+        result.append({
+            'name': name,
+            'pids': ','.join(map(str, data['pids'])),
+            'cpu_percent': data['cpu_percent'],
+            'memory_percent': data['memory_percent']
+        })
+    process_stats = sorted(result, key=lambda x: x['cpu_percent'], reverse=True)
+    return jsonify({"processes":process_stats })
+
+@app.route('/api/terminate-processes', methods=['POST'])
+def terminate_processes():
+    try:
+        pids_string = request.json.get('pids', '')
+        
+        if not pids_string:
+            return jsonify({"error": "No PIDs provided"}), 400
+        
+        pids = [int(pid) for pid in pids_string.split(',')]
+        
+        terminated = []
+        failed = []
+        
+        for pid in pids:
+            try:
+                process = psutil.Process(pid)
+                process.terminate()
+                process.wait(timeout=3)
+                
+                terminated.append(pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+                failed.append({'pid': pid, 'error': str(e)})
+        
+        if terminated:
+            response = {"status": "success", "terminated": terminated}
+        if failed:
+            response = response or {"status": "failure", "failed": failed}
+
+        return jsonify(response)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/')
 def index():
